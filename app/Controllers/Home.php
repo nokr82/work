@@ -17,7 +17,9 @@ class Home extends AppBase
         $inquiries  = $leads->where('created_at >=', $monthStart)->countAllResults();
         $sent       = $quotes->where('sent_at >=', $monthStart)->countAllResults();
         $contracts  = $leads->where('stage', 'contract')->where('updated_at >=', $monthStart)->countAllResults();
-        $rate       = $inquiries > 0 ? (int) round($contracts / $inquiries * 100) : 0;
+        // 계약률: 이번 달 문의 중 계약까지 간 비율 (분자·분모를 같은 문의 집합으로 맞춰 100%를 넘지 않게)
+        $converted  = $leads->where('created_at >=', $monthStart)->where('stage', 'contract')->countAllResults();
+        $rate       = $inquiries > 0 ? (int) round($converted / $inquiries * 100) : 0;
 
         $todos = $this->buildTodos($leads, $quotes);
 
@@ -45,7 +47,12 @@ class Home extends AppBase
 
             if ($l['stage'] === 'quoted') {
                 $latest = $quotes->where('lead_id', $l['id'])->where('status', 'sent')->orderBy('version', 'DESC')->first();
-                if ($latest && (int) $latest['view_count'] > 0 && $latest['sent_at'] && $now - strtotime($latest['sent_at']) >= 2 * 86400) {
+                if ($latest && ! empty($latest['revision_note'])) {
+                    // 고객이 수정 요청을 남겼으면 '응답 없음'이 아니라 수정 견적을 보내야 할 차례
+                    $item['type']  = 'revision_requested';
+                    $item['label'] = '수정 요청 도착';
+                    $item['desc']  = $latest['revision_note'];
+                } elseif ($latest && (int) $latest['view_count'] > 0 && $latest['sent_at'] && $now - strtotime($latest['sent_at']) >= 2 * 86400) {
                     $days          = (int) floor(($now - strtotime($latest['sent_at'])) / 86400);
                     $item['type']  = 'quote_stale';
                     $item['label'] = '견적 ' . $latest['view_count'] . '번 열람 · ' . $days . '일째 응답 없음';
@@ -72,11 +79,10 @@ class Home extends AppBase
             }
         }
 
-        // 견적 열람 후 무응답을 가장 위로
-        usort($todos, static function ($a, $b) {
-            return ($b['type'] === 'quote_stale') <=> ($a['type'] === 'quote_stale');
-        });
+        // 견적 열람 후 무응답을 가장 위로 (PHP 7.4의 usort는 순서를 보존하지 않아 나눠서 합친다)
+        $stale = array_filter($todos, static fn ($t) => $t['type'] === 'quote_stale');
+        $rest  = array_filter($todos, static fn ($t) => $t['type'] !== 'quote_stale');
 
-        return $todos;
+        return array_merge($stale, $rest);
     }
 }
