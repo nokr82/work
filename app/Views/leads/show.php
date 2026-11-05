@@ -16,6 +16,7 @@ if (! empty($lead['budget'])) { $meta[] = ['예산', $lead['budget']]; }
 if (! empty($lead['desired_time'])) { $meta[] = ['희망 시기', $lead['desired_time']]; }
 if (! empty($lead['measure_at'])) { $meta[] = ['실측', when_label($lead['measure_at'])]; }
 if (! empty($lead['memo'])) { $meta[] = ['메모', $lead['memo']]; }
+if (! empty($lead['privacy_agreed_at'])) { $meta[] = ['개인정보 동의', date('Y.n.j H:i', strtotime($lead['privacy_agreed_at']))]; }
 ?>
 <div class="top-header" style="padding: 12px 12px 16px; gap: 12px">
   <div style="display: flex; align-items: center; gap: 4px">
@@ -26,6 +27,7 @@ if (! empty($lead['memo'])) { $meta[] = ['메모', $lead['memo']]; }
       <h1 style="font-size: 20px; font-weight: 700"><?= esc($lead['name']) ?> 님</h1>
       <span class="t12 muted"><?= esc(mask_phone($phone)) ?> · <?= esc($lead['source']) ?> 문의 · <?= esc(short_date($lead['created_at'])) ?></span>
     </div>
+    <a href="<?= site_url('leads/' . $lead['id'] . '/edit') ?>" class="t13 bold" style="margin-left: auto; padding: 8px; text-decoration: none">수정</a>
   </div>
 
   <ol aria-label="진행 단계" class="progress" style="list-style: none; margin: 0; padding: 0 8px; grid-template-columns: repeat(5, minmax(0, 1fr))">
@@ -41,7 +43,7 @@ if (! empty($lead['memo'])) { $meta[] = ['메모', $lead['memo']]; }
     <a href="tel:<?= esc($phone) ?>" class="btn btn--primary">전화</a>
     <a href="sms:<?= esc($phone) ?>" class="btn">문자</a>
   </div>
-  <form method="post" action="<?= site_url('leads/' . $lead['id'] . '/stage') ?>" style="display: flex; gap: 8px; padding: 0 8px">
+  <form method="post" action="<?= site_url('leads/' . $lead['id'] . '/stage') ?>" style="display: flex; gap: 8px; padding: 0 8px"><?= csrf_field() ?>
     <label class="sr-only" for="stage">단계 변경</label>
     <select id="stage" name="stage" class="input" style="height: 44px; flex-grow: 1">
       <?php foreach (stage_labels() as $key => $label) : ?>
@@ -50,13 +52,23 @@ if (! empty($lead['memo'])) { $meta[] = ['메모', $lead['memo']]; }
     </select>
     <button class="btn">단계 변경</button>
   </form>
+  <form method="post" action="<?= site_url('leads/' . $lead['id'] . '/measure') ?>" style="display: flex; gap: 8px; padding: 0 8px"><?= csrf_field() ?>
+    <label class="sr-only" for="measure_at">실측 일정</label>
+    <input id="measure_at" type="datetime-local" name="measure_at" class="input" style="height: 44px; flex-grow: 1; min-width: 0"
+           value="<?= $lead['measure_at'] ? date('Y-m-d\TH:i', strtotime($lead['measure_at'])) : '' ?>">
+    <button class="btn"><?= $lead['measure_at'] ? '실측 변경' : '실측 잡기' ?></button>
+  </form>
 </div>
 
 <div class="pad">
   <section class="card stack" style="gap: 10px">
     <div class="row">
       <h2 class="section-title">견적</h2>
-      <a href="<?= site_url('quotes/new/' . $lead['id']) ?>" class="t13 bold" style="text-decoration: none">새 버전 만들기</a>
+      <?php $hasDraft = in_array('draft', array_column($quotes, 'status'), true); ?>
+      <?php /* 만들기는 POST: 링크 미리 불러오기·새로고침으로 초안이 생기지 않게 한다. 초안이 있으면 그 초안으로 간다. */ ?>
+      <form method="post" action="<?= site_url('quotes/new/' . $lead['id']) ?>"><?= csrf_field() ?>
+        <button class="t13 bold" style="background: none; border: 0; padding: 0; cursor: pointer; color: var(--primary)"><?= $hasDraft ? '작성 중인 견적 이어 쓰기' : ($quotes ? '새 버전 만들기' : '견적 만들기') ?></button>
+      </form>
     </div>
     <?php if (! $quotes) : ?><p class="t13 muted" style="margin: 0">아직 만든 견적이 없어요.</p><?php endif ?>
     <?php foreach ($quotes as $i => $qt) :
@@ -64,10 +76,10 @@ if (! empty($lead['memo'])) { $meta[] = ['메모', $lead['memo']]; }
         ?>
       <a href="<?= site_url('quotes/edit/' . $qt['id']) ?>" class="row" style="<?= $isLatest ? 'border: 1.5px solid var(--warn-border); background: var(--warn-tint);' : 'border: 1px solid var(--border);' ?> border-radius: 10px; padding: 12px; text-decoration: none; color: var(--text)">
         <div class="stack" style="gap: 3px">
-          <span style="font-size: 14px; font-weight: <?= $isLatest ? 700 : 400 ?>">v<?= $qt['version'] ?> · <?= man($qt['totals']['total']) ?><?= $qt['status'] === 'draft' ? ' (작성 중)' : '' ?></span>
-          <?php if ($qt['status'] === 'sent') : ?>
+          <span style="font-size: 14px; font-weight: <?= $isLatest ? 700 : 400 ?>">v<?= $qt['version'] ?> · <?= man($qt['totals']['total']) ?><?= $qt['status'] === 'draft' ? ' (작성 중)' : ($qt['status'] === 'replaced' ? ' (이전 버전)' : '') ?></span>
+          <?php if ($qt['status'] !== 'draft') : ?>
             <span class="t12 <?= $isLatest && $qt['view_count'] ? 'warn-text' : 'muted' ?>">
-              <?php if ($qt['view_count']) : ?>열람 <?= $qt['view_count'] ?>회 · 마지막 <?= esc(time_ago($qt['last_viewed_at'])) ?><?php else : ?>미열람 · <?= esc(time_ago($qt['sent_at'])) ?> 발송<?php endif ?>
+              <?php if ($qt['view_count']) : ?>열람 <?= $qt['view_count'] ?>회 · 마지막 <?= esc(time_ago($qt['last_viewed_at'])) ?><?php else : ?>미열람 · <?= esc(time_ago($qt['sent_at'])) ?> 발송<?php endif ?><?= $qt['status'] === 'sent' && \App\Models\QuoteModel::isExpired($qt) ? ' · 유효기간 지남' : '' ?>
             </span>
           <?php endif ?>
           <?php if (! empty($qt['revision_note'])) : ?><span class="t12 muted">수정 요청: <?= esc($qt['revision_note']) ?></span><?php endif ?>
@@ -98,7 +110,7 @@ if (! empty($lead['memo'])) { $meta[] = ['메모', $lead['memo']]; }
         <li style="display: flex; gap: 10px"><span class="muted" style="width: 64px; flex-shrink: 0"><?= esc(time_ago($log['created_at'])) ?></span><span><?= esc($log['message']) ?></span></li>
       <?php endforeach ?>
     </ul>
-    <form method="post" action="<?= site_url('leads/' . $lead['id'] . '/memo') ?>" style="display: flex; gap: 8px">
+    <form method="post" action="<?= site_url('leads/' . $lead['id'] . '/memo') ?>" style="display: flex; gap: 8px"><?= csrf_field() ?>
       <label style="display: flex; flex-grow: 1">
         <span class="sr-only">메모 추가</span>
         <input type="text" name="memo" class="text-input" placeholder="통화 내용이나 메모 남기기" maxlength="250">

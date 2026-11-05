@@ -101,6 +101,8 @@ a.card {
   display: flex;
   flex-direction: column;
 }
+/* display를 지정한 클래스(.stack 등)가 붙어 있어도 hidden 속성이면 숨긴다 */
+[hidden] { display: none !important; }
 .muted {
   color: var(--muted);
 }

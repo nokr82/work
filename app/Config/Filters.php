@@ -2,6 +2,8 @@
 
 namespace Config;
 
+use App\Filters\HoneypotCheck;
+use App\Filters\OwnerAuth;
 use CodeIgniter\Config\BaseConfig;
 use CodeIgniter\Filters\CSRF;
 use CodeIgniter\Filters\DebugToolbar;
@@ -24,6 +26,8 @@ class Filters extends BaseConfig
         'honeypot'      => Honeypot::class,
         'invalidchars'  => InvalidChars::class,
         'secureheaders' => SecureHeaders::class,
+        'owner'         => OwnerAuth::class,
+        'honeypotCheck' => HoneypotCheck::class,
     ];
 
     /**
@@ -35,7 +39,9 @@ class Filters extends BaseConfig
     public array $globals = [
         'before' => [
             // 'honeypot',
-            // 'csrf',
+            'csrf',
+            // 사장님 화면은 로그인 필요. 고객용(문의 폼·견적 링크)과 로그인 화면만 예외.
+            'owner' => ['except' => ['inquiry', 'inquiry/*', 'q/*', 'login', 'logout']],
             // 'invalidchars',
         ],
         'after' => [
@@ -69,5 +75,9 @@ class Filters extends BaseConfig
      *
      * @var array<string, array<string, list<string>>>
      */
-    public array $filters = [];
+    public array $filters = [
+        // 공개 문의 폼 스팸 방지: 사람에게는 안 보이는 칸을 폼에 넣고(after), 그 칸이 채워져 오면 막는다(before)
+        'honeypot'      => ['after' => ['inquiry', 'inquiry/*']],
+        'honeypotCheck' => ['before' => ['inquiry/*']],
+    ];
 }

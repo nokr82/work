@@ -44,23 +44,26 @@ class Prices extends AppBase
             'category_id' => 'required|is_natural_no_zero',
             'name'        => 'required|max_length[100]',
             'unit'        => 'required|max_length[10]',
-            'material'    => 'required|is_natural',
-            'labor'       => 'required|is_natural',
+            'material'    => 'required|is_natural|less_than[1000000000]',
+            'labor'       => 'required|is_natural|less_than[1000000000]',
         ];
-        $catId = (int) $this->request->getPost('category_id');
+        $catId  = (int) $this->request->getPost('category_id');
         $labels = ['category_id' => '공종', 'name' => '품목 이름', 'unit' => '단위', 'material' => '재료비', 'labor' => '노무비'];
-        if (! $this->check($rules, $labels)) {
+
+        // 천 단위 쉼표·공백을 먼저 지우고 검증한다 (수정 폼이 "12,000" 형태로 값을 채워 준다)
+        $amount = static fn ($v): string => str_replace([',', ' '], '', trim((string) $v));
+        $input  = [
+            'category_id' => (string) $catId,
+            'name'        => trim((string) $this->request->getPost('name')),
+            'unit'        => trim((string) $this->request->getPost('unit')),
+            'material'    => $amount($this->request->getPost('material')),
+            'labor'       => $amount($this->request->getPost('labor')),
+        ];
+        if (! $this->check($rules, $labels, $input)) {
             return redirect()->to(site_url('prices?cat=' . $catId))->with('errors', $this->validator->getErrors());
         }
 
-        $data = [
-            'category_id' => $catId,
-            'name'        => trim((string) $this->request->getPost('name')),
-            'unit'        => trim((string) $this->request->getPost('unit')),
-            // 천 단위 쉼표가 들어와도 숫자로 받는다
-            'material'    => (int) preg_replace('/\D/', '', (string) $this->request->getPost('material')),
-            'labor'       => (int) preg_replace('/\D/', '', (string) $this->request->getPost('labor')),
-        ];
+        $data = ['material' => (int) $input['material'], 'labor' => (int) $input['labor'], 'category_id' => $catId] + $input;
 
         $items = new PriceItemModel();
         $id    = (int) $this->request->getPost('id');
@@ -93,7 +96,12 @@ class Prices extends AppBase
             return redirect()->back();
         }
         $cats = new PriceCategoryModel();
-        $id   = $cats->insert(['name' => $name, 'sort_order' => $cats->countAllResults()], true);
+        // 견적 품목은 공종을 이름으로 구분하므로 같은 이름은 막는다
+        $dup = $cats->where('name', $name)->first();
+        if ($dup) {
+            return redirect()->to(site_url('prices?cat=' . $dup['id']))->with('errors', ['name' => '이미 있는 공종이에요: ' . $name]);
+        }
+        $id = $cats->insert(['name' => $name, 'sort_order' => $cats->countAllResults()], true);
 
         return redirect()->to(site_url('prices?cat=' . $id));
     }

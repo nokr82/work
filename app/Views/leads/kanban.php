@@ -56,9 +56,13 @@
       e.preventDefault();
       col.classList.remove('kanban__col--over');
       if (!dragged || dragged.closest('.kanban__col') === col) { return; }
-      var body = new URLSearchParams({ stage: col.dataset.stage });
-      fetch('<?= site_url('leads') ?>/' + dragged.dataset.lead + '/move', { method: 'POST', body: body })
-        .then(function (r) { if (r.ok) { location.reload(); } });
+      var body = new URLSearchParams({ stage: col.dataset.stage, '<?= csrf_token() ?>': '<?= csrf_hash() ?>' });
+      fetch('<?= site_url('leads') ?>/' + dragged.dataset.lead + '/move', { method: 'POST', body: body, headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function (r) {
+          if (r.ok) { location.reload(); }
+          else if (r.status === 401) { location.href = '<?= site_url('login') ?>'; } // 로그인 만료
+          else { alert('단계를 바꾸지 못했어요. 새로고침 후 다시 해 주세요.'); }
+        });
     });
   });
 })();

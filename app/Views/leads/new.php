@@ -10,14 +10,14 @@
   </div>
 </div>
 
-<form method="post" action="<?= site_url('leads/create') ?>" class="pad" style="gap: 16px">
+<form method="post" action="<?= site_url('leads/create') ?>" class="pad" style="gap: 16px"><?= csrf_field() ?>
   <?php foreach ($errors as $e) : ?><div class="flash flash--error"><?= esc($e) ?></div><?php endforeach ?>
 
   <label class="field"><span>이름</span><input class="input" type="text" name="name" value="<?= esc(old('name')) ?>" required></label>
   <label class="field"><span>연락처</span><input class="input" type="tel" name="phone" value="<?= esc(old('phone')) ?>" placeholder="010-0000-0000" required></label>
   <label class="field"><span>문의 경로</span>
     <select class="input" name="source">
-      <?php foreach (['전화', '카톡', '숨고', '블로그', '기타'] as $s) : ?><option><?= $s ?></option><?php endforeach ?>
+      <?php foreach ($sources as $s) : ?><option<?= old('source') === $s ? ' selected' : '' ?>><?= esc($s) ?></option><?php endforeach ?>
     </select>
   </label>
   <label class="field"><span>주소 <em>(선택)</em></span><input class="input" type="text" name="address" value="<?= esc(old('address')) ?>"></label>

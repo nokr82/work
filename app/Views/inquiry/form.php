@@ -16,9 +16,9 @@ $nextLabel = [1 => '다음: 공사 범위', 2 => '다음: 예산과 시기', 3 =
 ?>
 <div class="stack" style="padding: 20px 20px 0; gap: 16px">
   <div style="display: flex; align-items: center; gap: 10px">
-    <div class="logo__mark" style="width: 36px; height: 36px; font-size: 15px">한</div>
+    <div class="logo__mark" style="width: 36px; height: 36px; font-size: 15px"><?= esc(mb_substr(company('name'), 0, 1)) ?></div>
     <div class="stack">
-      <span class="t15 bold">한빛인테리어</span>
+      <span class="t15 bold"><?= esc(company('name')) ?></span>
       <span class="t12 muted">무료 상담 · 보통 2시간 안에 연락드려요</span>
     </div>
   </div>
@@ -33,7 +33,7 @@ $nextLabel = [1 => '다음: 공사 범위', 2 => '다음: 예산과 시기', 3 =
 </div>
 
 <?php $action = $step < 4 ? site_url('inquiry/step/' . $step) : site_url('inquiry/submit'); ?>
-<form id="inquiry" method="post" action="<?= $action ?>" style="flex-grow: 1; padding: 20px; display: flex; flex-direction: column; gap: 28px">
+<form id="inquiry" method="post" action="<?= $action ?>" style="flex-grow: 1; padding: 20px; display: flex; flex-direction: column; gap: 28px"><?= csrf_field() ?>
   <h1 style="font-size: 22px; font-weight: 700; line-height: 1.4"><?= $titles[$step] ?></h1>
   <?php foreach ($errors as $e) : ?><div class="flash flash--error"><?= esc($e) ?></div><?php endforeach ?>
 
@@ -89,6 +89,19 @@ $nextLabel = [1 => '다음: 공사 범위', 2 => '다음: 예산과 시기', 3 =
       <dt>예산</dt><dd><?= esc($v('budget') ?: '-') ?></dd>
       <dt>희망 시기</dt><dd><?= esc($v('desired_time') ?: '-') ?></dd>
     </dl>
+
+    <fieldset class="fieldset" style="gap: 8px">
+      <legend>개인정보 수집·이용 동의 <span class="warn-text">(필수)</span></legend>
+      <ul class="t12 muted" style="margin: 0; padding-left: 18px; line-height: 1.7">
+        <li>수집 항목: 이름, 연락처, 공사 주소, 공사 정보(공간·평수·범위·예산·희망 시기·메모)</li>
+        <li>이용 목적: 상담 연락, 실측 일정 안내, 견적 작성·발송</li>
+        <li>보관 기간: <?= esc(company('privacyRetention')) ?></li>
+        <li>동의하지 않으실 수 있지만, 그 경우 문의 접수가 어려워요.</li>
+      </ul>
+      <label class="choice choice--box" style="justify-content: flex-start; gap: 8px">
+        <input type="checkbox" name="agree" value="1" required>위 내용을 확인했고 동의해요
+      </label>
+    </fieldset>
   <?php endif ?>
 </form>
 

@@ -114,6 +114,30 @@ if (! function_exists('quote_totals')) {
     }
 }
 
+if (! function_exists('company')) {
+    // 업체 정보 (Config\Company). company('phone') -> .env의 company.phone
+    function company(string $key): string
+    {
+        return (string) (config('Company')->{$key} ?? '');
+    }
+}
+
+if (! function_exists('josa')) {
+    // 받침 여부로 조사를 고른다. josa('재료비', '은/는') -> "재료비는"
+    function josa(string $word, string $pair): string
+    {
+        [$withFinal, $withoutFinal] = explode('/', $pair);
+        $last = mb_substr($word, -1);
+        $code = mb_ord($last, 'UTF-8');
+        if ($code < 0xAC00 || $code > 0xD7A3) {
+            // 한글이 아니면 받침을 알 수 없으니 둘 다 보여 준다
+            return $word . $withFinal . '(' . $withoutFinal . ')';
+        }
+
+        return $word . (($code - 0xAC00) % 28 > 0 ? $withFinal : $withoutFinal);
+    }
+}
+
 if (! function_exists('item_amount')) {
     function item_amount(array $it): int
     {

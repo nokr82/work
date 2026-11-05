@@ -7,9 +7,12 @@ $phoneIcon = '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 1
 <div class="pad" style="padding: 24px 20px 0; gap: 20px">
   <div class="row">
     <div class="stack" style="gap: 4px">
-      <span class="t13 muted">한빛인테리어</span>
+      <span class="t13 muted"><?= esc(company('name')) ?></span>
       <h1 style="font-size: 24px; font-weight: 700">오늘 할 일 <span style="color: var(--primary)"><?= count($todos) ?>건</span></h1>
     </div>
+    <form method="post" action="<?= site_url('logout') ?>" style="margin-left: auto; margin-right: 4px"><?= csrf_field() ?>
+      <button class="t12 muted" style="background: none; border: 0; cursor: pointer; padding: 8px">로그아웃</button>
+    </form>
     <button class="icon-btn" aria-label="알림">
       <svg class="i" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
     </button>
@@ -56,7 +59,9 @@ $phoneIcon = '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 1
               <svg class="i" width="18" height="18" viewBox="0 0 24 24" stroke-width="2" aria-hidden="true"><?= $phoneIcon ?></svg>
             </a>
           <?php elseif ($t['type'] === 'no_quote') : ?>
-            <a href="<?= site_url('quotes/new/' . $l['id']) ?>" class="btn btn--soft" style="flex-shrink: 0; padding: 0 14px; font-size: 13px">견적 쓰기</a>
+            <form method="post" action="<?= site_url('quotes/new/' . $l['id']) ?>" style="flex-shrink: 0"><?= csrf_field() ?>
+              <button class="btn btn--soft" style="padding: 0 14px; font-size: 13px">견적 쓰기</button>
+            </form>
           <?php else : ?>
             <a href="<?= site_url('leads/' . $l['id']) ?>" class="icon-btn" aria-label="<?= esc($l['name']) ?> 님 문의 상세" style="color: var(--text)">
               <svg class="i" width="18" height="18" viewBox="0 0 24 24" stroke-width="2" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>

@@ -9,6 +9,12 @@ use CodeIgniter\Exceptions\PageNotFoundException;
 
 class Leads extends AppBase
 {
+    // 전화 문의 등록 폼의 '문의 경로' 선택지
+    public const SOURCES = ['전화', '카톡', '숨고', '블로그', '기타'];
+    // 고객 문의 폼으로 들어온 문의의 경로
+    private const FORM_SOURCE = '문의 폼';
+    private const SPACES      = ['아파트', '빌라', '오피스텔', '상가'];
+
     // 문의 목록 (모바일): 단계 필터 + 검색
     public function index(): string
     {
@@ -45,7 +51,7 @@ class Leads extends AppBase
     // 전화 문의 직접 등록 폼
     public function new(): string
     {
-        return view('leads/new', ['title' => '전화 문의 등록', 'errors' => session()->getFlashdata('errors') ?? []]);
+        return view('leads/new', ['title' => '전화 문의 등록', 'sources' => self::SOURCES, 'errors' => session()->getFlashdata('errors') ?? []]);
     }
 
     public function create()
@@ -53,9 +59,10 @@ class Leads extends AppBase
         $rules = [
             'name'  => 'required|max_length[50]',
             'phone' => 'required|regex_match[/^[0-9\-\s]{9,15}$/]',
+            'source' => 'permit_empty|in_list[' . implode(',', self::SOURCES) . ']',
         ];
-        if (! $this->check($rules, ['name' => '이름', 'phone' => '연락처'])) {
-            return redirect()->back()->withInput()->with('errors', $this->validator->getErrors());
+        if (! $this->check($rules, ['name' => '이름', 'phone' => '연락처', 'source' => '문의 경로'])) {
+            return redirect()->to(site_url('leads/new'))->withInput()->with('errors', $this->validator->getErrors());
         }
 
         $leads = new LeadModel();
@@ -70,6 +77,96 @@ class Leads extends AppBase
         (new LeadLogModel())->add((int) $id, '문의 직접 등록');
 
         return redirect()->to(site_url('leads/' . $id));
+    }
+
+    // 문의 정보 수정 폼
+    public function edit(string $id): string
+    {
+        $lead = $this->findLead($id);
+
+        return view('leads/edit', [
+            'title'   => '문의 정보 수정',
+            'lead'    => $lead,
+            'sources' => array_unique(array_merge(self::SOURCES, [self::FORM_SOURCE], [$lead['source']])),
+            'spaces'  => self::SPACES,
+            'errors'  => session()->getFlashdata('errors') ?? [],
+        ]);
+    }
+
+    public function update(string $id)
+    {
+        $lead   = $this->findLead($id);
+        $input  = [
+            'name'         => trim((string) $this->request->getPost('name')),
+            'phone'        => trim((string) $this->request->getPost('phone')),
+            'source'       => trim((string) $this->request->getPost('source')),
+            'address'      => trim((string) $this->request->getPost('address')),
+            'space_type'   => trim((string) $this->request->getPost('space_type')),
+            'size_py'      => trim((string) $this->request->getPost('size_py')),
+            // 공사 범위는 쉼표로 구분해 입력 ("주방, 욕실")
+            'scopes'       => implode(',', array_filter(array_map('trim', explode(',', (string) $this->request->getPost('scopes'))), 'strlen')),
+            'budget'       => trim((string) $this->request->getPost('budget')),
+            'desired_time' => trim((string) $this->request->getPost('desired_time')),
+            'memo'         => trim((string) $this->request->getPost('memo')),
+        ];
+        // 원래 경로가 목록에 없던 값이어도(예전 데이터) 그대로 두는 것은 허용
+        $sources = array_unique(array_merge(self::SOURCES, [self::FORM_SOURCE], [$lead['source']]));
+        $rules   = [
+            'name'         => 'required|max_length[50]',
+            'phone'        => 'required|regex_match[/^[0-9\-\s]{9,15}$/]',
+            'source'       => 'required|in_list[' . implode(',', $sources) . ']',
+            'address'      => 'permit_empty|max_length[200]',
+            'space_type'   => 'permit_empty|in_list[' . implode(',', self::SPACES) . ']',
+            'size_py'      => 'permit_empty|is_natural_no_zero|less_than[1000]',
+            'scopes'       => 'permit_empty|max_length[255]',
+            'budget'       => 'permit_empty|max_length[50]',
+            'desired_time' => 'permit_empty|max_length[100]',
+        ];
+        $labels = [
+            'name' => '이름', 'phone' => '연락처', 'source' => '문의 경로', 'address' => '주소', 'space_type' => '공간 유형',
+            'size_py' => '평수', 'scopes' => '공사 범위', 'budget' => '예산', 'desired_time' => '희망 시기',
+        ];
+        if (! $this->check($rules, $labels, $input)) {
+            return redirect()->to(site_url('leads/' . $lead['id'] . '/edit'))->withInput()->with('errors', $this->validator->getErrors());
+        }
+
+        // 빈칸은 NULL로 저장 (평수 0, 빈 문자열이 화면에 찍히지 않게)
+        $data = array_map(static fn ($v) => $v === '' ? null : $v, $input);
+        $data['size_py'] = $data['size_py'] === null ? null : (int) $data['size_py'];
+        (new LeadModel())->update($lead['id'], $data);
+
+        // 무엇을 고쳤는지 기록
+        $changed = array_keys(array_filter($data, static fn ($v, $k) => (string) $v !== (string) ($lead[$k] ?? ''), ARRAY_FILTER_USE_BOTH));
+        if ($changed) {
+            (new LeadLogModel())->add((int) $lead['id'], '정보 수정: ' . implode(', ', array_map(static fn ($k) => $labels[$k] ?? '메모', $changed)));
+        }
+
+        return redirect()->to(site_url('leads/' . $lead['id']));
+    }
+
+    // 문의 삭제: 견적·견적 품목·기록까지 함께 지운다 (스팸·중복·테스트 문의 정리용)
+    public function delete(string $id)
+    {
+        $lead = $this->findLead($id);
+        if ($this->request->getPost('confirm_name') !== $lead['name']) {
+            return redirect()->to(site_url('leads/' . $lead['id'] . '/edit'))->with('errors', ['delete' => '삭제하려면 고객 이름을 정확히 입력해 주세요.']);
+        }
+
+        $db = db_connect();
+        $db->transStart();
+        $quoteIds = array_column((new QuoteModel())->select('id')->where('lead_id', $lead['id'])->findAll(), 'id');
+        if ($quoteIds) {
+            $db->table('quote_items')->whereIn('quote_id', $quoteIds)->delete();
+            $db->table('quotes')->whereIn('id', $quoteIds)->delete();
+        }
+        $db->table('lead_logs')->where('lead_id', $lead['id'])->delete();
+        $db->table('leads')->where('id', $lead['id'])->delete();
+        $db->transComplete();
+        if (! $db->transStatus()) {
+            return redirect()->to(site_url('leads/' . $lead['id'] . '/edit'))->with('errors', ['delete' => '삭제 중 문제가 생겨 취소했어요. 다시 시도해 주세요.']);
+        }
+
+        return redirect()->to(site_url('leads'));
     }
 
     // 단계 변경 (폼)
@@ -93,6 +190,26 @@ class Leads extends AppBase
         $this->moveTo($lead, $stage);
 
         return $this->response->setJSON(['ok' => true]);
+    }
+
+    // 실측 일정 저장 (비우면 일정 삭제). 신규·상담 단계였다면 '실측'으로 넘긴다.
+    public function measure(string $id)
+    {
+        $lead = $this->findLead($id);
+        $raw  = trim((string) $this->request->getPost('measure_at'));
+        $ts   = $raw === '' ? null : strtotime($raw);
+        if ($ts === false) {
+            return redirect()->to(site_url('leads/' . $lead['id']));
+        }
+
+        $at = $ts ? date('Y-m-d H:i:00', $ts) : null;
+        (new LeadModel())->update($lead['id'], ['measure_at' => $at]);
+        (new LeadLogModel())->add((int) $lead['id'], $at ? '실측 일정: ' . date('n월 j일 H:i', $ts) : '실측 일정 취소');
+        if ($at && in_array($lead['stage'], ['new', 'consulting'], true)) {
+            $this->moveTo($lead, 'measure');
+        }
+
+        return redirect()->to(site_url('leads/' . $lead['id']));
     }
 
     // 메모 추가
@@ -131,14 +248,13 @@ class Leads extends AppBase
             ];
         }
 
-        $monthStart = date('Y-m-01 00:00:00');
 
         return view('leads/kanban', [
             'title'     => '문의 칸반 (PC)',
             'active'    => 'leads',
             'columns'   => $columns,
             'active_n'  => $leads->where('stage !=', 'contract')->countAllResults(),
-            'contracts' => $leads->where('stage', 'contract')->where('updated_at >=', $monthStart)->countAllResults(),
+            'contracts' => $leads->contractsThisMonth(),
         ]);
     }
 
@@ -159,11 +275,15 @@ class Leads extends AppBase
             if ($at > $now) {
                 $top  = when_label($l['measure_at']) . ' 실측';
                 $tone = $at - $now <= 2 * 86400 ? 'info' : 'muted';
-            } elseif (! $quotes->where('lead_id', $l['id'])->countAllResults()) {
+            } elseif (! $quotes->sentCount((int) $l['id'])) {
+                // 초안만 있고 아직 안 보냈어도 '미발송'이다. 초안이 있으면 그 초안으로 바로 간다.
                 $top   = '실측 후 ' . (int) floor(($now - $at) / 86400) . '일 · 견적 미발송';
                 $tone  = 'warn';
                 $alert = true;
-                $url   = 'quotes/new/' . $l['id'];
+                $draft = $quotes->draftFor((int) $l['id']);
+                if ($draft) {
+                    $url = 'quotes/edit/' . $draft['id'];
+                }
             }
         } elseif ($l['stage'] === 'quoted') {
             $q = $quotes->where('lead_id', $l['id'])->where('status', 'sent')->orderBy('version', 'DESC')->first();
@@ -216,7 +336,7 @@ class Leads extends AppBase
         if (! in_array($stage, LeadModel::STAGES, true) || $stage === $lead['stage']) {
             return;
         }
-        (new LeadModel())->update($lead['id'], ['stage' => $stage]);
+        (new LeadModel())->update($lead['id'], LeadModel::stageData($stage));
         (new LeadLogModel())->add((int) $lead['id'], '단계 변경: ' . stage_label($lead['stage']) . ' → ' . stage_label($stage));
     }
 }

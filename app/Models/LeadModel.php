@@ -13,7 +13,20 @@ class LeadModel extends Model
     protected $allowedFields = [
         'name', 'phone', 'source', 'stage', 'address', 'space_type', 'size_py', 'scopes',
         'budget', 'desired_time', 'memo', 'photo_count', 'measure_at',
+        'privacy_agreed_at', 'contracted_at',
     ];
+
+    // 단계를 바꿀 때 함께 저장할 값. 계약이 되면 계약 시각을 남기고, 계약에서 빠지면 지운다.
+    public static function stageData(string $stage): array
+    {
+        return ['stage' => $stage, 'contracted_at' => $stage === 'contract' ? date('Y-m-d H:i:s') : null];
+    }
+
+    // 이번 달 계약 건수 (계약 시각 기준)
+    public function contractsThisMonth(): int
+    {
+        return $this->where('stage', 'contract')->where('contracted_at >=', date('Y-m-01 00:00:00'))->countAllResults();
+    }
 
     public const STAGES = ['new', 'consulting', 'measure', 'quoted', 'contract'];
 

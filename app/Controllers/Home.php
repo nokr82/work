@@ -16,7 +16,7 @@ class Home extends AppBase
         $monthStart = date('Y-m-01 00:00:00');
         $inquiries  = $leads->where('created_at >=', $monthStart)->countAllResults();
         $sent       = $quotes->where('sent_at >=', $monthStart)->countAllResults();
-        $contracts  = $leads->where('stage', 'contract')->where('updated_at >=', $monthStart)->countAllResults();
+        $contracts  = $leads->contractsThisMonth();   // 계약 시각 기준 (updated_at은 메모·일정 수정에도 바뀜)
         // 계약률: 이번 달 문의 중 계약까지 간 비율 (분자·분모를 같은 문의 집합으로 맞춰 100%를 넘지 않게)
         $converted  = $leads->where('created_at >=', $monthStart)->where('stage', 'contract')->countAllResults();
         $rate       = $inquiries > 0 ? (int) round($converted / $inquiries * 100) : 0;
@@ -67,7 +67,8 @@ class Home extends AppBase
                 if ($at > $now && $at - $now <= 2 * 86400) {
                     $item['type']  = 'measure_soon';
                     $item['label'] = when_label($l['measure_at']) . ' 실측';
-                } elseif ($at <= $now && ! $quotes->where('lead_id', $l['id'])->countAllResults()) {
+                } elseif ($at <= $now && ! $quotes->sentCount((int) $l['id'])) {
+                    // 초안만 만들어 두고 안 보낸 경우도 '견적 미발송'으로 본다
                     $item['type']  = 'no_quote';
                     $item['label'] = '실측 후 ' . (int) floor(($now - $at) / 86400) . '일 · 견적 미발송';
                     $item['desc']  = LeadModel::summary($l) . ' · ' . $l['source'];

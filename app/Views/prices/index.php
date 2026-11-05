@@ -22,7 +22,7 @@
         <?= esc($c['name']) ?> <span class="t12 muted"><?= $c['item_count'] ?></span>
       </a>
     <?php endforeach ?>
-    <form method="post" action="<?= site_url('prices/category') ?>" class="cat-add">
+    <form method="post" action="<?= site_url('prices/category') ?>" class="cat-add"><?= csrf_field() ?>
       <label class="sr-only" for="cat_name">새 공종 이름</label>
       <input id="cat_name" class="input" type="text" name="name" placeholder="+ 공종 추가" maxlength="30" required>
     </form>
@@ -56,7 +56,7 @@
               <td class="num"><?= won($it['labor']) ?></td>
               <td class="num <?= $on ? 'bold' : '' ?>"><?= won($it['material'] + $it['labor']) ?></td>
               <td>
-                <form method="post" action="<?= site_url('prices/item/' . $it['id'] . '/toggle') ?>">
+                <form method="post" action="<?= site_url('prices/item/' . $it['id'] . '/toggle') ?>"><?= csrf_field() ?>
                   <input type="checkbox" <?= $on ? 'checked' : '' ?> aria-label="<?= esc($it['name']) ?> 사용" onchange="this.form.submit()">
                 </form>
               </td>
@@ -77,10 +77,10 @@
       </tbody>
     </table>
     <?php /* 표 안의 입력칸은 form 속성으로 아래 폼들과 연결된다 */ ?>
-    <form id="edit-form" method="post" action="<?= site_url('prices/item') ?>">
+    <form id="edit-form" method="post" action="<?= site_url('prices/item') ?>"><?= csrf_field() ?>
       <input type="hidden" name="id" value="<?= (int) $editing ?>"><input type="hidden" name="category_id" value="<?= $catId ?>">
     </form>
-    <form id="new-form" method="post" action="<?= site_url('prices/item') ?>">
+    <form id="new-form" method="post" action="<?= site_url('prices/item') ?>"><?= csrf_field() ?>
       <input type="hidden" name="category_id" value="<?= $catId ?>">
     </form>
   </section>

@@ -8,7 +8,8 @@ use App\Models\LeadModel;
 // 고객이 로그인 없이 작성하는 4단계 문의 폼. 입력값은 세션에 쌓다가 마지막에 저장한다.
 class Inquiry extends AppBase
 {
-    private const STEPS = [1 => '연락처', 2 => '공사 범위', 3 => '예산과 시기', 4 => '확인'];
+    private const STEPS  = [1 => '연락처', 2 => '공사 범위', 3 => '예산과 시기', 4 => '확인'];
+    private const SCOPES = ['전체 리모델링', '주방', '욕실', '도배', '바닥', '샷시', '조명·전기', '잘 모르겠어요'];
 
     public function form(): string
     {
@@ -23,7 +24,7 @@ class Inquiry extends AppBase
             'data'   => session()->get('inquiry') ?? [],
             'errors' => session()->getFlashdata('errors') ?? [],
             'spaces' => ['아파트', '빌라', '오피스텔', '상가'],
-            'scopes' => ['전체 리모델링', '주방', '욕실', '도배', '바닥', '샷시', '조명·전기', '잘 모르겠어요'],
+            'scopes' => self::SCOPES,
             'budgets' => ['500만 원 미만', '500~1,000만 원', '1,000~3,000만 원', '3,000~5,000만 원', '5,000만 원 이상', '잘 모르겠어요'],
         ]);
     }
@@ -52,7 +53,8 @@ class Inquiry extends AppBase
             $data[$field] = $this->request->getPost($field);
         }
         if ($step === 2) {
-            $data['scopes'] = (array) $this->request->getPost('scopes');
+            // 화면에 있는 선택지만 받는다 (임의 값이 저장되지 않게)
+            $data['scopes'] = array_values(array_intersect(self::SCOPES, (array) $this->request->getPost('scopes')));
         }
         if ($step === 3) {
             $data['memo'] = $this->request->getPost('memo');
@@ -69,6 +71,15 @@ class Inquiry extends AppBase
         if (empty($d['name']) || empty($d['phone'])) {
             return redirect()->to(site_url('inquiry?step=1'));
         }
+        // 개인정보 수집·이용 동의는 필수 (브라우저 required를 우회한 요청도 막는다)
+        if ($this->request->getPost('agree') !== '1') {
+            return redirect()->to(site_url('inquiry?step=4'))->with('errors', ['agree' => '개인정보 수집·이용에 동의해 주셔야 접수할 수 있어요.']);
+        }
+        // 자동 등록 방지: 같은 IP에서 1시간에 5건까지
+        $key = 'inquiry-' . md5((string) $this->request->getIPAddress());
+        if (service('throttler')->check($key, 5, HOUR) === false) {
+            return redirect()->to(site_url('inquiry?step=4'))->with('errors', ['rate' => '짧은 시간에 문의가 많이 접수됐어요. 급하시면 전화로 연락 주세요.']);
+        }
 
         $leadId = (new LeadModel())->insert([
             'name'         => trim($d['name']),
@@ -82,6 +93,7 @@ class Inquiry extends AppBase
             'budget'       => $d['budget'] ?? null,
             'desired_time' => $d['desired_time'] ?? null,
             'memo'         => $d['memo'] ?? null,
+            'privacy_agreed_at' => date('Y-m-d H:i:s'),
         ], true);
         (new LeadLogModel())->add((int) $leadId, '고객이 문의 폼으로 접수');
 

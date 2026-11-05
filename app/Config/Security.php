@@ -70,8 +70,10 @@ class Security extends BaseConfig
      * --------------------------------------------------------------------------
      *
      * Regenerate CSRF Token on every submission.
+     *
+     * 칸반 드래그(fetch)를 여러 번 하거나 탭을 여러 개 열어도 토큰이 어긋나지 않게 끈다.
      */
-    public bool $regenerate = true;
+    public bool $regenerate = false;
 
     /**
      * --------------------------------------------------------------------------
